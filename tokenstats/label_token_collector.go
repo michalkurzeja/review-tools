@@ -9,19 +9,42 @@ import (
 	"golang.org/x/oauth2"
 )
 
+const pageSize = 100
+
 type LabelTokenCollector struct {
 	client *github.Client
 	cliCtx *cli.Context
 }
 
 func (c *LabelTokenCollector) Collect(ctx context.Context) TokenStats {
-	issues, _, err := c.client.Issues.ListByRepo(ctx, c.cliCtx.String("owner"), c.cliCtx.String("repository"), &github.IssueListByRepoOptions{})
+	owner := c.cliCtx.String("owner")
+	repo := c.cliCtx.String("repository")
 
-	if err != nil {
-		panic(err)
-	}
+	issues := c.collectIssues(ctx, owner, repo)
 
 	return extractStats(issues)
+}
+
+func (c *LabelTokenCollector) collectIssues(ctx context.Context, owner string, repo string) []*github.Issue {
+	var allIssues []*github.Issue
+	page := 1
+
+	for {
+		issues, _, err := c.client.Issues.ListByRepo(ctx, owner, repo, &github.IssueListByRepoOptions{ListOptions: github.ListOptions{Page: page, PerPage: pageSize}})
+
+		if err != nil {
+			panic(err)
+		}
+
+		if len(issues) == 0 {
+			break
+		}
+
+		allIssues = append(allIssues, issues...)
+		page++
+	}
+
+	return allIssues
 }
 
 func NewLabelTokenCollector(ctx context.Context, cliCtx *cli.Context) *LabelTokenCollector {
